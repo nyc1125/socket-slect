@@ -14,15 +14,29 @@ select高并发服务器
 # 源码说明
 
 ## 公共头:
-    Data_Server/Data_Client.h: 自定义消息头和消息体,内容应该一致,因为分开开发所以各自保留了一份  
-    
-    CMD_Server/CMD_Client.h: 自定义命令,内容一致  
+    serMessageHeader.hpp/cliMessageHeader.hpp : 自定义消息头和消息体,内容应该一致,因为分开开发所以各自保留了一份(命令定义也放在这里面了)   
 
 ## server:  
-    ser_tcpSocket.h/cpp:服务器socket实现代码（初始版，未封装成类）  
+    server.h/server.cpp : 服务器封装成Server类  
     
-    server.cpp:程序入口  
+    CellServer.hpp : 服务器子线程类，Server类用来接受客户端连接，CellServer类用来处理客户端消息  
+    
+    ClientSocket.hpp : 封装服务器接受到的客户端  
+
+    CELLTimestamp.hpp : 计时器类，用来统计每秒钟服务器接收到包的数量
+    
+    main.cpp : 程序入口  
 ## client:  
-    cli_tcpSocket.h/cpp:客户端socket实现代码（初始版，未封装成类）  
+    client.hpp : 服务器封装成Client类   
     
-    client.cpp:程序入口,客户端需要输入命令时，打开 61 62 行代码（客户端发送线程），客户端运行时可以从键盘输入已经自定义的命令:login,logout,exit
+    client.cpp : 程序入口  
+
+# 该服务器在我的电脑上:(windows 环境下)测试数据：
+ 
+    1. 1个子线程，4000个客户端同时连接服务器，3秒钟左右4000个客户端能全部连接成功，每秒钟服务器处理 2w-2.5w 个包左右（每个包100byte）
+ 
+    2. 4个子线程，4000个客户端同时连接服务器，3秒钟左右4000个客户端能全部连接成功，每秒钟服务器处理 14w 个包左右（每个包100byte）
+ 
+    3. 1个子线程，4000个客户端同时连接服务器，3秒钟左右4000个客户端能全部连接成功，每秒钟服务器处理 1.7w-2w 个包左右(每个包1kb)
+ 
+    4. 4个子线程，4000个客户端同时连接服务器，3秒钟左右4000个客户端能全部连接成功，每秒钟服务器处理 10w 个包左右（每个包1kb）
