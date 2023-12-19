@@ -1,8 +1,23 @@
-#pragma once
-#include"CMD_Server.h"
+//命令的枚举
+enum CMD
+{
+	CMD_LOGIN = 1,//登录
+	CMD_LOGIN_RESULT = 201,//登录结果
+	CMD_LOGOUT = 2,//登出
+	CMD_LOGOUT_RESULT = 202,
+	CMD_NEWUSER_JOIN = 3,
+	CMD_NEWUSER_JOIN_RESULT = 203,
+	CMD_EXIT = 4
+};
+
 //数据包头
 struct DataHead
 {
+	DataHead()
+	{
+		this->cmd = CMD_EXIT;
+		this->dataLength = 0;
+	}
 	short cmd;//命令
 	short dataLength;//数据长度
 };
@@ -15,6 +30,7 @@ struct Login :public DataHead
 	}
 	char userName[32];
 	char password[32];
+	char data[956];
 };
 struct LoginResult :public DataHead
 {
@@ -23,7 +39,9 @@ struct LoginResult :public DataHead
 		this->dataLength = sizeof(LoginResult);
 	}
 	int result;
+	char ret_char[92];
 };
+//登出
 struct Logout :public DataHead
 {
 	Logout() {
@@ -32,9 +50,9 @@ struct Logout :public DataHead
 	}
 	char userName[32];
 };
-struct LogoutResult :public DataHead 
+struct LogoutResult :public DataHead
 {
-	LogoutResult(){
+	LogoutResult() {
 		this->cmd = CMD_LOGOUT_RESULT;
 		this->dataLength = sizeof(LogoutResult);
 	}
@@ -59,20 +77,11 @@ struct NewUser_Join_Result :public DataHead
 	char ip[32];
 	int port;
 };
-struct Error :public DataHead 
+struct Exit :public DataHead
 {
-	Error() {
-		this->cmd = CMD_ERROR;
-		this->dataLength = sizeof(Error);
+	Exit() {
+		this->cmd = CMD_EXIT;
+		this->dataLength = sizeof(Exit);
 	}
-	
-	char userName[32];
-};
-struct ErrorResult :public DataHead 
-{
-	ErrorResult() {
-		this->cmd = CMD_ERROR_RESULT;
-		this->dataLength = sizeof(ErrorResult);
-	}
-	char result[32]="请输入正确命令";
+	int result = 1;
 };

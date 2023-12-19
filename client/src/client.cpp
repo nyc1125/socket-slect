@@ -1,105 +1,129 @@
-#include"cli_tcpSocket.h"
-#include"Data_Client.h"
-#include"CMD_Client.h"
-#include<thread>
 #include<iostream>
+#include"client.hpp"
+#include<thread>
+#include<mutex>
+#include"CELLTimesTamp.hpp"
 using namespace std;
-
-bool isRun = true;
-void cliThread(SOCKET cliSocket) {
+//客户端UI线程
+void cliThread(Client *cliSocket) {
 	while (true) {
-
-		char buf[1024];
-		cout << "请输入命令......" << endl;
+		char buf[1024] = {};
+		std::cout << "请输入命令......" << endl;
 		cin >> buf;
 		if (0 == strcmp(buf, "exit")) {
+			Exit *exit=NULL;
+			cliSocket->sendMessage(exit,sizeof(exit));
+			cliSocket->Close();
 			cout << "退出客户端线程" << endl;
-			isRun = false;
 			return;
 		}
 		if (0 == strcmp(buf, "login")) {
-			//向服务器发送消息
+			//向服务器发送消息 只发送了消息体（继承了消息头，但是长度只有消息体那么长）
 			Login login;
-			login.cmd = CMD_LOGIN;
-			login.dataLength = sizeof(Login);
-			strcpy_s(login.userName, "张仕豪");
-			strcpy_s(login.password, "123456");
-			send(cliSocket, (const char*)&login, sizeof(Login), 0);
+			strcpy(login.userName, "张仕豪");
+			strcpy(login.password, "1233211234567");
+			cliSocket->sendMessage(&login,sizeof(login));	
 		}
 		else if ((0 == strcmp(buf, "logout"))) {
 			//向服务器发送数据
-			Logout logout = {};//登出请求体
-			logout.cmd = CMD_LOGOUT;
-			logout.dataLength = sizeof(Logout);
-			strcpy_s(logout.userName, "zsh");
-			send(cliSocket, (const char*)&logout, sizeof(Logout), 0);
+			Logout logout ;//登出请求体
+			strcpy(logout.userName, "张仕豪");
+			cliSocket->sendMessage(&logout,sizeof(logout));
 		}
 		else
 		{
-			//向服务器发送数据
-			Error error = {};
-			strcpy_s(error.userName, "zsh");
-			send(cliSocket, (const char*)&error, sizeof(Error), 0);
+			cout << "命令错误，请重新输入......" << endl;
 		}
 	}
 }
 
-int main() {
+//客户端最大连接数量
+const int clientMaxSize = 4000;
+//创建客户端集合
+Client* clients[clientMaxSize];
+//线程数量
+const int threadCount = 4;
 
-	init_Socket();
-	//创建客户端socket
-	SOCKET cliSocket = creatClientSocket("127.0.0.1");
-	if (false == cliSocket) {
-		cout << "客户端创建失败" << endl;
-		return 0;
-	}
-	//连接服务器
-	sockaddr_in socket_in = {};
-	int len = sizeof(socket_in);
-	SOCKET serSocket = connect(cliSocket, (const sockaddr*)&socket_in, len);
+//线程是否运行
+bool isRun = true;
+//发送线程
+void sendThread(int id)
+{
+	//线程分配
+	int c = clientMaxSize / threadCount;
+	int begin = (id - 1) * c;
+	int end = id * c;
 
-	/*thread t1(cliThread, cliSocket);
-	t1.detach();*/
-	//向服务器端发信息
-	
-	while (isRun) {
-		fd_set readfds = {};
-		fd_set writefds = {};
-		fd_set exceptfds = {};
-		//最后一个prama:select的阻塞时间，若为Null则select一直阻塞直到有时间发生
-		//清空fdset中所有文件描述符
-		FD_ZERO(&readfds);
-		FD_ZERO(&writefds);
-		FD_ZERO(&exceptfds);
-		//添加文件描述符fd到fdset集合中
-		FD_SET(cliSocket, &readfds);
-		FD_SET(cliSocket, &writefds);
-		FD_SET(cliSocket, &exceptfds);
-
-		//把新客户端socket加入可读集合
-		FD_SET(cliSocket, &readfds);
-
-		//最后一个参数：
-		timeval time_out = { 1,0 };
-		int ret = select(cliSocket + 1, &readfds, 0, 0, &time_out);
-		if (ret < 0)
+	//创建客户端
+	for (int i = begin; i < end; i++)
+	{
+		if (!isRun)
 		{
-			cout << "客户端select出错" << endl;
-			break;
+			return;
 		}
-		if (FD_ISSET(cliSocket, &readfds)) {
-			FD_CLR(cliSocket, &readfds);
-			if (-1 == processor(cliSocket)) {
-				cout << "select任务结束" << endl;
-				break;
-			}
-		}
-		cout << "空闲时间处理其他业务...." << endl;
+		clients[i] = new Client();
 	}
-	closesocket(cliSocket);
-	close_Socket();
-	cout << "成功退出\n";
+	for (int i = begin; i < end; i++)
+	{
+		if (!isRun)
+		{
+			return;
+		}
+		int ret = clients[i]->connectServer("127.0.0.1", 88);
+		if (SOCKET_ERROR == ret)
+		{
+			continue;
+		}
+	}
+	cout << "客户端连接完毕" << endl;
 
+	Login login;
+	strcpy_s(login.userName, "张仕豪");
+	strcpy_s(login.password, "123456");
+	const int nLen = sizeof(login);
+
+	//发送数据
+	while (isRun)
+	{
+		for (int i = begin; i < end; i++)
+		{
+			clients[i]->sendMessage(&login, nLen);
+		}
+	}
+
+	for (int i = 0; i < clientMaxSize - 1; i++)
+	{
+		clients[i]->Close();
+	}
+}
+int main() 
+{
+	//UI线程
+	/*thread t1(cliThread, &clients);
+	t1.detach();*/
+
+	//启动发送线程
+	for (int i =0; i < threadCount; i++)
+	{
+		thread tSend(sendThread,i+1);
+		if (true == tSend.joinable())
+		{
+			tSend.detach();
+			cout << "启动线程:" << i + 1 << endl;
+		}
+	}
+
+	//主线程在此阻塞住
+	while (1);
+	
+	//清空堆区
+	for (int i = 0; i < clientMaxSize; i++)
+	{
+		delete clients[i];
+	}
+	cout << "退出主程序" << endl;
 	system("pause");
 	return 0;
 }
+
+
